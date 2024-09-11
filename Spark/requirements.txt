@@ -1,0 +1,8 @@
+wheel
+setuptools
+pathlib
+pyYAML
+py4j
+numpy
+pandas
+pyspark==3.1.1

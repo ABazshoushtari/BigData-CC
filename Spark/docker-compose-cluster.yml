@@ -1,0 +1,169 @@
+version: "3.6"
+
+services:
+  namenode:
+    build: ./docker/hadoop/namenode
+    container_name: namenode
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+      - ./mnt/hadoop/data/:/hadoop-data/input
+      - ./requirements.txt:/hadoop-data/requirements.txt
+    environment:
+      - CLUSTER_NAME=test
+    env_file:
+      - ./envs/hadoop.env
+    ports:
+      - "9870:9870"
+      - "8020:8020"
+    networks:
+      - hadoop_network
+
+  resourcemanager:
+    build: ./docker/hadoop/resource-manager
+    container_name: resourcemanager
+    restart: always
+    depends_on:
+      - namenode
+      - datanode1
+      - datanode2
+    env_file:
+      - ./envs/hadoop.env
+    ports:
+      - "8089:8088"
+    networks:
+      - hadoop_network
+
+  historyserver:
+    build: ./docker/hadoop/history-server
+    container_name: historyserver
+    depends_on:
+      - namenode
+      - datanode1
+      - datanode2
+    volumes:
+      - hadoop_historyserver:/hadoop/yarn/timeline
+    env_file:
+      - ./envs/hadoop.env
+    ports:
+      - "8188:8188"
+    networks:
+      - hadoop_network
+
+  nodemanager1:
+    build: ./docker/hadoop/node-manager
+    container_name: nodemanager1
+    depends_on:
+      - namenode
+      - datanode1
+      - datanode2
+    env_file:
+      - ./envs/hadoop.env
+    ports:
+      - "8042:8042"
+    networks:
+      - hadoop_network
+
+  datanode1:
+    build: ./docker/hadoop/datanode
+    container_name: datanode1
+    depends_on:
+      - namenode
+    volumes:
+      - hadoop_datanode1:/hadoop/dfs/data
+    env_file:
+      - ./envs/hadoop.env
+    networks:
+      - hadoop_network
+
+  datanode2:
+    build: ./docker/hadoop/datanode
+    container_name: datanode2
+    depends_on:
+      - namenode
+    volumes:
+      - hadoop_datanode2:/hadoop/dfs/data
+    env_file:
+      - ./envs/hadoop.env
+    networks:
+      - hadoop_network
+
+  spark-master:
+    image: spark-base
+    container_name: spark-master
+    ports:
+      - "9090:8081"
+      - "7077:7077"
+    volumes:
+       - ./mnt/notebooks:/workspace
+    environment:
+      - SPARK_LOCAL_IP=${SPARK_LOCAL_IP}
+      - SPARK_WORKLOAD=${WORKLOAD_MASTER}
+    networks:
+      - hadoop_network
+    command: /bin/sh -c "./start-spark.sh"
+
+  spark-worker-a:
+    image: spark-base
+    container_name: spark-worker1
+    ports:
+      - "9091:8081"
+      - "7100:7000"
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MASTER=${SPARK_MASTER}
+      - SPARK_WORKER_CORES=${SPARK_WORKER_CORES}
+      - SPARK_WORKER_MEMORY=${SPARK_WORKER_MEMORY}
+      - SPARK_DRIVER_MEMORY=${SPARK_DRIVER_MEMORY}
+      - SPARK_EXECUTOR_MEMORY=${SPARK_EXECUTOR_MEMORY}
+      - SPARK_WORKLOAD=${WORKLOAD_WORKER}
+      - SPARK_LOCAL_IP=${SPARK_LOCAL_A_IP}
+    volumes:
+       - ./mnt/notebooks:/workspace
+    networks:
+      - hadoop_network
+    command: /bin/sh -c "./start-spark.sh"
+
+  spark-worker-b:
+    image: spark-base
+    container_name: spark-worker2
+    ports:
+      - "9092:8081"
+      - "7001:7000"
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MASTER=${SPARK_MASTER}
+      - SPARK_WORKER_CORES=${SPARK_WORKER_CORES}
+      - SPARK_WORKER_MEMORY=${SPARK_WORKER_MEMORY}
+      - SPARK_DRIVER_MEMORY=${SPARK_DRIVER_MEMORY}
+      - SPARK_EXECUTOR_MEMORY=${SPARK_EXECUTOR_MEMORY}
+      - SPARK_WORKLOAD=${WORKLOAD_WORKER}
+      - SPARK_LOCAL_IP=${SPARK_LOCAL_B_IP}
+    volumes:
+      - ./mnt/notebooks:/workspace
+    networks:
+      - hadoop_network
+    command: /bin/sh -c "./start-spark.sh"
+
+  jupyter-notebook:
+    build: ./docker/jupyter
+    container_name: jupyter-notebook
+    ports:
+      - 8888:8888
+      - 4040:4040
+    networks:
+     - hadoop_network
+    volumes:
+      - ./mnt/notebooks:/workspace
+
+volumes:
+  hadoop_namenode:
+  hadoop_datanode1:
+  hadoop_datanode2:
+  hadoop_historyserver:
+
+networks:
+  hadoop_network:
+    name: hadoop_network
+    external: true
